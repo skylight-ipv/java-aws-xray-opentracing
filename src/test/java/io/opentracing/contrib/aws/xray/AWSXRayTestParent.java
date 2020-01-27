@@ -39,6 +39,6 @@ abstract class AWSXRayTestParent {
     AWSXRaySpan mockSpan(String operationName) {
         return new AWSXRaySpan(
                 new SegmentImpl(awsxRayRecorder, operationName),
-                new AWSXRaySpanContext(Collections.emptyMap()));
+                new AWSXRaySpanContext("mock-span", Collections.emptyMap()));
     }
 }

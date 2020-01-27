@@ -12,23 +12,19 @@ class AWSXRayScope implements Scope {
     private final AWSXRayScope previousScope;
 
     private final AWSXRaySpan span;
-    private final boolean finishOnClose;
 
-    AWSXRayScope(AWSXRayScopeManager scopeManager, AWSXRayScope previousScope, AWSXRaySpan span, boolean finishOnClose) {
+    AWSXRayScope(AWSXRayScopeManager scopeManager, AWSXRayScope previousScope, AWSXRaySpan span) {
         this.scopeManager = scopeManager;
         this.previousScope = previousScope;
         this.span = span;
-        this.finishOnClose = finishOnClose;
     }
 
     @Override
     public void close() {
-        if (finishOnClose) span.finish();
         scopeManager.setCurrentScope(previousScope);
     }
 
-    @Override
-    public AWSXRaySpan span() {
+    AWSXRaySpan span() {
         return span;
     }
 }

@@ -6,6 +6,7 @@ import com.amazonaws.xray.entities.Subsegment;
 import io.opentracing.Span;
 import io.opentracing.contrib.tag.ExtraTags;
 import io.opentracing.log.Fields;
+import io.opentracing.tag.Tag;
 import io.opentracing.tag.Tags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,6 +150,12 @@ class AWSXRaySpan implements Span {
     @Override
     public Span setTag(String key, Number value) {
         setTagAny(key, value);
+        return this;
+    }
+
+    @Override
+    public <T> Span setTag(Tag<T> tag, T value) {
+        setTagAny(tag.getKey(), value);
         return this;
     }
 

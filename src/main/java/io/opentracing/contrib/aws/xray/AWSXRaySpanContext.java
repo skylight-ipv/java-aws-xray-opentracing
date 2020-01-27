@@ -1,9 +1,11 @@
 package io.opentracing.contrib.aws.xray;
 
+import com.amazonaws.xray.entities.TraceHeader;
 import io.opentracing.SpanContext;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * In AWS, the span context usually only needs to hold the trace header
@@ -17,9 +19,11 @@ import java.util.Map;
 class AWSXRaySpanContext implements SpanContext {
 
     private final Map<String, String> baggage;
+    private final String spanId;
 
-    AWSXRaySpanContext(Map<String, String> baggage) {
+    AWSXRaySpanContext(String spanId, Map<String, String> baggage) {
         this.baggage = new HashMap<>(baggage);
+        this.spanId = spanId;
     }
 
     @Override
@@ -37,5 +41,15 @@ class AWSXRaySpanContext implements SpanContext {
 
     String getBaggageItem(String key) {
         return baggage.get(key);
+    }
+
+    @Override
+    public String toTraceId() {
+        return getBaggageItem(TraceHeader.HEADER_KEY);
+    }
+
+    @Override
+    public String toSpanId() {
+        return this.spanId;
     }
 }

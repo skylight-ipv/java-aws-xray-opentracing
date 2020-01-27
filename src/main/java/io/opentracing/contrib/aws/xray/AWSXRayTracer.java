@@ -6,6 +6,7 @@ import com.amazonaws.xray.entities.*;
 import io.opentracing.*;
 import io.opentracing.propagation.Format;
 import io.opentracing.propagation.TextMap;
+import io.opentracing.tag.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,8 +14,10 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 
 /**
  * Top-level OpenTracing {@link Tracer} implementation which is backed
@@ -27,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @SuppressWarnings("WeakerAccess")
 public class AWSXRayTracer implements Tracer {
 
+    private static final Pattern spanNameInvalidCharactersRegex = Pattern.compile("[^-A-Za-z0-9 \t_.:/%&#=+@]");
     private static final Logger log = LoggerFactory.getLogger(AWSXRayTracer.class);
 
     private final AWSXRayRecorder xRayRecorder;
@@ -43,13 +47,22 @@ public class AWSXRayTracer implements Tracer {
     }
 
     @Override
-    public Span activeSpan() {
+    public AWSXRaySpan activeSpan() {
         return scopeManager.activeSpan();
     }
 
     @Override
     public SpanBuilder buildSpan(String operationName) {
         return new AWSXRaySpanBuilderImpl(operationName);
+    }
+
+    @Override
+    public Scope activateSpan(Span span) {
+        return scopeManager.activate(span);
+    }
+
+    @Override
+    public void close() {
     }
 
     @Override
@@ -69,7 +82,11 @@ public class AWSXRayTracer implements Tracer {
             final TextMap textMap = (TextMap) carrier;
             final Map<String, String> baggage = new HashMap<>();
             for (Map.Entry<String, String> e : textMap) { baggage.put(e.getKey(), e.getValue()); }
-            return new AWSXRaySpanContext(baggage);
+            final String spanId = Optional.ofNullable(activeSpan())
+                    .flatMap(span -> Optional.ofNullable(span.getEntity()))
+                    .flatMap(entity -> Optional.ofNullable(entity.getId())).orElse("");
+
+            return new AWSXRaySpanContext(spanId, baggage);
         }
         else {
             throw new UnsupportedOperationException("Format " + format.toString() +  " is not currently supported");
@@ -111,7 +128,13 @@ public class AWSXRayTracer implements Tracer {
         private final Map<String, SpanContext> references;
 
         private AWSXRaySpanBuilderImpl(String operationName) {
-            this.operationName = operationName;
+            if (spanNameInvalidCharactersRegex.matcher(operationName).find()) {
+                final String replacement = spanNameInvalidCharactersRegex.matcher(operationName).replaceAll("-");
+                log.warn("operation name «{}» is invalid; using «{}» instead", operationName, replacement);
+                this.operationName = replacement;
+            } else {
+                this.operationName = operationName;
+            }
 
             this.stringTags = new HashMap<>();
             this.booleanTags = new HashMap<>();
@@ -174,21 +197,21 @@ public class AWSXRayTracer implements Tracer {
         }
 
         @Override
-        public SpanBuilder withStartTimestamp(long microseconds) {
-            startTimestampEpochSeconds.set(microseconds / 1000.0 / 1000.0);
+        public <T> SpanBuilder withTag(Tag<T> tag, T value) {
+            if(value instanceof Number) {
+                withTag(tag.getKey(), (Number) value);
+            } else if (value instanceof Boolean) {
+                withTag(tag.getKey(), (Boolean) value);
+            } else {
+                stringTags.put(tag.getKey(), value.toString());
+            }
             return this;
         }
 
         @Override
-        @Deprecated
-        public Span startManual() {
-            return start();
-        }
-
-        @Override
-        public Scope startActive(boolean finishSpanOnClose) {
-            final Span span = start();
-            return scopeManager.activate(span, finishSpanOnClose);
+        public SpanBuilder withStartTimestamp(long microseconds) {
+            startTimestampEpochSeconds.set(microseconds / 1000.0 / 1000.0);
+            return this;
         }
 
         @Override
@@ -307,7 +330,7 @@ public class AWSXRayTracer implements Tracer {
             final Map<String, String> childBaggage = new HashMap<>(parentBaggage);
             childBaggage.put(TraceHeader.HEADER_KEY, traceHeader.toString());
 
-            final AWSXRaySpanContext newSpanContext = new AWSXRaySpanContext(childBaggage);
+            final AWSXRaySpanContext newSpanContext = new AWSXRaySpanContext(childEntity.getId(), childBaggage);
 
             // Defer to AWSXRaySpan to set tag values since this will handle
             // converting to X-Ray's naming conventions and format
@@ -337,6 +360,16 @@ public class AWSXRayTracer implements Tracer {
         @Override
         public Iterable<Map.Entry<String, String>> baggageItems() {
             return span.context().baggageItems();
+        }
+
+        @Override
+        public String toTraceId() {
+            return span.context().getBaggageItem(TraceHeader.HEADER_KEY);
+        }
+
+        @Override
+        public String toSpanId() {
+            return "";
         }
     }
 }

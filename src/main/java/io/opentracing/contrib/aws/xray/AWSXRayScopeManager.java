@@ -53,20 +53,16 @@ class AWSXRayScopeManager implements ScopeManager {
     }
 
     @Override
-    public AWSXRayScope active() {
-        return this.currentScope.get();
-    }
-
-    AWSXRaySpan activeSpan() {
+    public AWSXRaySpan activeSpan() {
         final AWSXRayScope activeScope = this.currentScope.get();
         return activeScope == null ? null : activeScope.span();
     }
 
     @Override
-    public Scope activate(Span span, boolean finishSpanOnClose) {
+    public Scope activate(Span span) {
         if (span instanceof AWSXRaySpan) {
             final AWSXRayScope oldScope = currentScope.get();
-            final AWSXRayScope newScope = new AWSXRayScope(this, oldScope, (AWSXRaySpan) span, finishSpanOnClose);
+            final AWSXRayScope newScope = new AWSXRayScope(this, oldScope, (AWSXRaySpan) span);
             setCurrentScope(newScope);
             return newScope;
         }

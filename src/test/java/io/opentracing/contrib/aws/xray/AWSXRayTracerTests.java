@@ -2,6 +2,7 @@ package io.opentracing.contrib.aws.xray;
 
 import com.amazonaws.xray.entities.TraceHeader;
 import io.opentracing.Scope;
+import io.opentracing.Span;
 import io.opentracing.SpanContext;
 import io.opentracing.propagation.*;
 import org.junit.jupiter.api.DisplayName;
@@ -20,15 +21,16 @@ class AWSXRayTracerTests extends AWSXRayTestParent {
     @Test
     @DisplayName("store a reference to the current span")
     void storeReference() {
-        final Scope scope = tracer
+        final Span span = tracer
             .buildSpan("simple-span")
-            .startActive(true);
+            .start();
+        final Scope scope = tracer.activateSpan(span);
 
         assertNotNull(tracer.activeSpan());
-        assertNotNull(tracer.scopeManager().active().span());
+        assertNotNull(tracer.scopeManager().activeSpan());
 
-        assertEquals(tracer.activeSpan(), scope.span());
-        assertEquals(tracer.scopeManager().active().span(), scope.span());
+        assertEquals(tracer.activeSpan(), span);
+        assertEquals(tracer.scopeManager().activeSpan(), span);
 
         scope.close();
     }
@@ -37,7 +39,7 @@ class AWSXRayTracerTests extends AWSXRayTestParent {
     @DisplayName("succeed on SpanContext injection (empty)")
     void contextInjectEmpty() {
         final TextMap textMap = new TextMapAdapter(new HashMap<>());
-        final SpanContext context = new AWSXRaySpanContext(new HashMap<>());
+        final SpanContext context = new AWSXRaySpanContext("test-span", new HashMap<>());
 
         tracer.inject(context, Format.Builtin.TEXT_MAP, textMap);
         assertFalse(textMap.iterator().hasNext());
@@ -47,7 +49,7 @@ class AWSXRayTracerTests extends AWSXRayTestParent {
     @DisplayName("succeed on SpanContext injection (TraceID)")
     void contextInjectTraceId() {
         final TextMap textMap = new TextMapAdapter(new HashMap<>());
-        final SpanContext context = new AWSXRaySpanContext(Collections.singletonMap(
+        final SpanContext context = new AWSXRaySpanContext("test-span", Collections.singletonMap(
             TraceHeader.HEADER_KEY,
             traceHeader.toString()
         ));

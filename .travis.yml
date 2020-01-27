@@ -9,7 +9,16 @@ cache:
   directories:
   - $HOME/.m2/repository
 
-before_install:
+script:
+  - mvn test
+
+install:
+  - ./mvnw install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+
+after_success:
+  - mvn jacoco:report coveralls:report
+
+before_deploy:
   # allocate commits to CI, not the owner of the deploy key
   - git config user.name "opentracingci"
   - git config user.email "opentracingci+opentracing@googlegroups.com"
@@ -17,15 +26,8 @@ before_install:
   - git config credential.helper "store --file=.git/credentials"
   - echo "https://$GH_TOKEN:@github.com" > .git/credentials
 
-script:
-  - ./travis/publish.sh
-
-install:
-  - ./mvnw install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
-
-branches:
-  only:
-  - master
-
-after_success:
-  - mvn jacoco:report coveralls:report
+deploy:
+  - provider: script
+    script: ./travis/publish.sh
+    on:
+      branch: master
